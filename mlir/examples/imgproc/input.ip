@@ -1,0 +1,4 @@
+load("hello.png");
+grayscale();
+convolve();
+save("world.png");
