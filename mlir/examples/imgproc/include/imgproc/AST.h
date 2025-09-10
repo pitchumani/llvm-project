@@ -32,7 +32,9 @@ public:
 		: kind(kind), location(std::move(location)) {}
 	virtual ~ExprAST() = default;
 	ExprASTKind getKind() const { return kind; }
-	const Location &loc() { return location; }
+	const Location &loc() const { return location; }
+
+	static bool classof(const ExprAST *) { return true; }
 
 private:
 	const ExprASTKind kind;
@@ -45,40 +47,46 @@ using ExprASTList = std::vector<std::unique_ptr<ExprAST>>;
 /// Expression class for string literals like "hello.png"
 class StringExprAST : public ExprAST {
 	std::string val;
-	
+
 public:
 	StringExprAST(Location loc, std::string val)
-		: ExprAST(Expr_String, std::move(loc)), val(val) {}
+		: ExprAST(Expr_String, std::move(loc)), val(std::move(val)) {}
 
-	std::string getValue() { return val; }
+	const std::string &getValue() const { return val; }
 
-	static bool classof(const ExprAST *c) { return c->getKind() == Expr_String; }
+	static bool classof(const ExprAST *c) {
+		return c && c->getKind() == Expr_String;
+	}
 };
-	
+
 /// Expression class for builtin load calls.
 class LoadExprAST : public ExprAST {
-	std::unique_ptr<ExprAST> arg;
+	std::unique_ptr<StringExprAST> arg;
 
 public:
-	LoadExprAST(Location loc, std::unique_ptr<ExprAST> arg)
+	LoadExprAST(Location loc, std::unique_ptr<StringExprAST> arg)
 		: ExprAST(Expr_Load, std::move(loc)), arg(std::move(arg)) {}
 
-	ExprAST *getArg() { return arg.get(); }
+	ExprAST *getArg() const { return arg.get(); }
 
-	static bool classof(const ExprAST *c) { return c->getKind() == Expr_Load; }
+	static bool classof(const ExprAST *c) {
+		return c && c->getKind() == Expr_Load;
+	}
 };
 
 /// Expression class for builtin save calls.
 class SaveExprAST : public ExprAST {
-	std::unique_ptr<ExprAST> arg;
+	std::unique_ptr<StringExprAST> arg;
 
 public:
-	SaveExprAST(Location loc, std::unique_ptr<ExprAST> arg)
+	SaveExprAST(Location loc, std::unique_ptr<StringExprAST> arg)
 		: ExprAST(Expr_Save, std::move(loc)), arg(std::move(arg)) {}
 
-	ExprAST *getArg() { return arg.get(); }
+	ExprAST *getArg() const { return arg.get(); }
 
-	static bool classof(const ExprAST *c) { return c->getKind() == Expr_Save; }
+	static bool classof(const ExprAST *c) {
+		return c && c->getKind() == Expr_Save;
+	}
 };
 
 /// Expression class for builtin grayscale calls.
@@ -101,14 +109,14 @@ public:
 
 /// This class represents a list of expressions to be processed together
 class ModuleAST {
-	std::vector<ExprAST> expressions;
+	std::unique_ptr<ExprASTList> body;
 
 public:
-	ModuleAST(std::vector<ExprAST> expressions)
-		: expressions(std::move(expressions)) {}
+	ModuleAST(std::unique_ptr<ExprASTList> body)
+		: body(std::move(body)) {}
 
-	auto begin() { return expressions.begin(); }
-	auto end() { return expressions.end(); }
+	auto begin() { return body.get()->begin(); }
+	auto end() { return body.get()->end(); }
 };
 
 void dump(ModuleAST &);

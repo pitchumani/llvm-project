@@ -48,7 +48,7 @@ parseInputFile(llvm::StringRef filename) {
 }
 
 int main(int argc, char **argv) {
-	cl::ParseCommandLineOptions(argc, argv, "imgproc compiler\n");
+	cl::ParseCommandLineOptions(argc, argv, "ImgProc compiler\n");
 
 	auto moduleAST = parseInputFile(inputFilename);
 	if (!moduleAST)

@@ -6,6 +6,7 @@
 
 #include "imgproc/AST.h"
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Casting.h"
@@ -15,6 +16,13 @@
 using namespace imgproc;
 
 namespace {
+
+/// Helper to manage increase and decrease indentation
+struct Indent {
+    Indent(int &level) : level(level) { ++level; }
+    ~Indent() { --level; }
+    int &level;
+};
 
 /// Helper class that implement the AST tree traversal and print the nodes
 class ASTDumper {
@@ -28,6 +36,16 @@ private:
 	void dump(SaveExprAST *expr);
 	void dump(GrayscaleExprAST *expr);
 	void dump(ConvolveExprAST *expr);
+
+	void indent() {
+		for (int i = 0; i < curIndent; ++i)
+			llvm::errs() << "  ";
+	}
+	int curIndent = 0;
+	void INDENT() {
+		Indent level_(curIndent);
+		indent();
+	}
 };
 
 } // namespace
@@ -42,45 +60,80 @@ static std::string loc(T *node) {
 
 /// Dispatch to a generic expressions to the appropriate subclass
 void ASTDumper::dump(ExprAST *expr) {
-	llvm::TypeSwitch<ExprAST *>(expr)
-		.Case<StringExprAST, LoadExprAST, SaveExprAST, GrayscaleExprAST,
-			  ConvolveExprAST>([&](auto *node) {
-				  this->dump(node);
-			  })
-		.Default([&](ExprAST *) {
-			// no match
-			llvm::errs() << "<unknown Expr, kind " << expr->getKind() << ">\n";
-		});
+    if (!expr) {
+        INDENT();
+        llvm::errs() << "<null>\n";
+        return;
+    }
+	#if 1
+ 	llvm::TypeSwitch<ExprAST *>(expr)
+ 		.Case<StringExprAST, LoadExprAST, SaveExprAST, GrayscaleExprAST,
+ 			  ConvolveExprAST>([&](auto *node) {
+ 				  this->dump(node);
+ 			  })
+ 		.Default([&](ExprAST *) {
+ 			// no match
+			INDENT();
+ 			llvm::errs() << "<unknown Expr, kind " << expr->getKind() << ">\n";
+ 		});
+	#else
+    if (auto *load = llvm::dyn_cast<LoadExprAST>(expr))
+        return dump(load);
+    if (auto *save = llvm::dyn_cast<SaveExprAST>(expr))
+        return dump(save);
+    if (auto *grayscale = llvm::dyn_cast<GrayscaleExprAST>(expr))
+        return dump(grayscale);
+    if (auto *convolve = llvm::dyn_cast<ConvolveExprAST>(expr))
+        return dump(convolve);
+    if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
+        return dump(str);
+
+    INDENT();
+    llvm::errs() << "<unknown Expr, kind " << expr->getKind() << ">\n";
+	#endif
 }
 
 void ASTDumper::dump(StringExprAST *str) {
-	llvm::errs() << "\"" << str->getValue() << loc(str) << "\"\n";
+	INDENT();
+	llvm::errs() << "\"" << str->getValue() << "\" " << loc(str) << "\n";
 }
 
 void ASTDumper::dump(LoadExprAST *node) {
+	INDENT();
 	llvm::errs() << "load [ " << loc(node) << "\n";
-	dump(node->getArg());
+	if (ExprAST *arg = node->getArg()) {
+		INDENT();
+		dump(arg);
+	}
+	INDENT();
 	llvm::errs() << "]\n";
 }
 
 void ASTDumper::dump(SaveExprAST *node) {
+	INDENT();
 	llvm::errs() << "save [ " << loc(node) << "\n";
-	dump(node->getArg());
+	if (ExprAST *arg = node->getArg()) {
+		INDENT();
+		dump(arg);
+	}
+	INDENT();
 	llvm::errs() << "]\n";
 }
 
 void ASTDumper::dump(GrayscaleExprAST *node) {
-	llvm::errs() << "grayscale [ " << loc(node) << "]\n";
+	INDENT();
+	llvm::errs() << "grayscale [ " << loc(node) << " ]\n";
 }
 
 void ASTDumper::dump(ConvolveExprAST *node) {
-	llvm::errs() << "convolve [ " << loc(node) << "]\n";
+	INDENT();
+	llvm::errs() << "convolve [ " << loc(node) << " ]\n";
 }
 
 void ASTDumper::dump(ModuleAST *node) {
 	llvm::errs() << "Module:\n";
-	for (auto &e : *node) {
-		dump(&e);
+	for (const auto &e : *node) {
+		dump(e.get());
 	}
 }
 

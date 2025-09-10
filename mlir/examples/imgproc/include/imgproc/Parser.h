@@ -11,6 +11,8 @@
 #include "imgproc/AST.h"
 #include "imgproc/Lexer.h"
 
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <map>
@@ -29,9 +31,9 @@ public:
 	std::unique_ptr<ModuleAST> parseModule() {
 		lexer.getNextToken();
 
-		std::vector<ExprAST> expressions;
+		auto exprList = std::make_unique<ExprASTList>();
 		while(auto e = parseExpression()) {
-			expressions.push_back(std::move(*e));
+			exprList->push_back(std::move(e));
 			if (lexer.getCurToken() == tok_eof)
 				break;
 		}
@@ -39,7 +41,7 @@ public:
 		if (lexer.getCurToken() != tok_eof)
 			return parseError<ModuleAST>("nothing", "at end of module");
 
-		return std::make_unique<ModuleAST>(std::move(expressions));
+		return std::make_unique<ModuleAST>(std::move(exprList));
 	}
 
 private:
@@ -63,7 +65,7 @@ private:
 	///   ::= identifier '(' expression ')'
 	std::unique_ptr<ExprAST> parseIdentifierExpr() {
 		std::string name(lexer.getId());
-		llvm::errs() << "parseIdentifierExpr: name: " << name << "\n";
+		//llvm::errs() << "parseIdentifierExpr: name: " << name << "\n";
 		auto loc = lexer.getLastLocation();
 		lexer.getNextToken(); // eat identifier
 
@@ -84,19 +86,32 @@ private:
 				return parseError<ExprAST>(")", "in expression");
 		}
 		lexer.consume(Token(')'));
-		llvm::errs() << "parseIdentifierExpr: parsed arg\n";
-		
+		/*
+		llvm::errs() << "parseIdentifierExpr: " << name;
+		if (arg) {
+			llvm::errs() << "(" <<
+				static_cast<StringExprAST*>(arg.get())->getValue()
+						 << ")";
+		}
+		llvm::errs() << "\n";
+		*/
 		// check the call for builtin functions
 		if (name == "load") {
 			if (!arg)
 				return parseError<ExprAST>("<single arg>", "as argument to load()");
 
-			return std::make_unique<LoadExprAST>(std::move(loc), std::move(arg));
+			   auto uptr_arg = std::unique_ptr<StringExprAST>(
+				   static_cast<StringExprAST*>(arg.release()));
+			   return std::make_unique<LoadExprAST>(std::move(loc),
+													std::move(uptr_arg));
 		} else if (name == "save") {
 			if (!arg)
 				return parseError<ExprAST>("<single arg>", "as argument to save()");
 
-			return std::make_unique<SaveExprAST>(std::move(loc), std::move(arg));
+			   auto uptr_arg = std::unique_ptr<StringExprAST>(
+				   static_cast<StringExprAST*>(arg.release()));
+			   return std::make_unique<SaveExprAST>(std::move(loc),
+													std::move(uptr_arg));
 		} else if (name == "grayscale") {
 			if (arg)
 				return parseError<ExprAST>("unexpected argument",
@@ -119,7 +134,7 @@ private:
 	std::unique_ptr<ExprAST> parseStringExpr() {
 		auto loc = lexer.getLastLocation();
 		auto str = lexer.getString();
-		llvm::errs() << "parseStringExpr: str: " << str << "\n";
+		//llvm::errs() << "parseStringExpr: str: " << str << "\n";
 
 		auto result =
 			std::make_unique<StringExprAST>(std::move(loc), str);
